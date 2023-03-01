@@ -1,0 +1,9 @@
+#./multi_experiments_il.sh 5 15 0 1 100
+#./multi_experiments_il.sh 5 15 0 2 200
+#./multi_experiments_il.sh 5 15 0 4 400
+#./multi_experiments_il.sh 5 15 0 8 800
+#./multi_experiments_il.sh 5 15 0 16 1600
+#./multi_experiments_il.sh 5 15 0 32 3200
+./multi_experiments_il.sh 5 15 0 64 6400
+./multi_experiments_il.sh 5 15 0 128 12800
+#./multi_experiments_il.sh 5 15 0 256 25600

@@ -1,0 +1,9 @@
+#./multi_experiments_lsc_il_prob.sh 5 15 0 1 100
+#./multi_experiments_lsc_il_prob.sh 5 15 0 2 200
+#./multi_experiments_lsc_il_prob.sh 5 15 0 4 400
+#./multi_experiments_lsc_il_prob.sh 5 15 0 8 800
+#./multi_experiments_lsc_il_prob.sh 5 15 0 16 1600
+./multi_experiments_lsc_il_prob.sh 5 15 2 32 3200
+./multi_experiments_lsc_il_prob.sh 5 15 2 64 6400
+./multi_experiments_lsc_il_prob.sh 5 15 2 128 12800
+./multi_experiments_lsc_il_prob.sh 5 15 2 256 25600
