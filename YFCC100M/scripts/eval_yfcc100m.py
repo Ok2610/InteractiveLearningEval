@@ -17,9 +17,9 @@ GLOBAL_POS = []
 GLOBAL_NEG = []
 GLOBAL_SUGGS = []
 
-COLLECTION_SIZE = 1007360
-MAX_B = 10074
-TOTAL_VIDEOS = 7475
+COLLECTION_SIZE = 99206564
+MAX_B = 992066
+TOTAL_VIDEOS = -1 # Not applicable
 
 IV = []
 
@@ -30,10 +30,25 @@ def ts():
     return "[" + str(strftime("%d %b, %H:%M:%S")) + "]"
 
 
-def read_actors(actorsFile):
+def read_actors(actorsPath, total_runs):
     actors = {}
-    with open(actorsFile, 'r') as f:
-        actors = json.load(f)
+    act_len = len(os.listdir(actorsPath+'/actor_items'))
+
+    for i in range(0,act_len):
+        actors[i] = {}
+        actors[i]['relevant'] = []
+        actors[i]['pos'] = [] # Initial positives
+        actors[i]['neg'] = [] # Initial negatives
+        actors[i]['neg_r'] = [] # YFCC evaluation injects predetermined negatives rather than negatives from the suggestion set
+        with open((actorsPath+'/actor_items/a%d_1000.json' % i), 'r'):
+            actors[i]['relevant'] = json.load(f)
+        with open((actorsPath+'/actor_runs/a%d_1000.json' % i), 'r'):
+            runs = json.load(f)
+            for r in range(0,total_runs):
+                actors[i]['pos'].append(runs['r']['pos'])
+                actors[i]['neg'].append(runs['r']['neg_init'])
+                actors[i]['neg_r'].append(runs['r']['neg'])
+
     return actors
 
 
@@ -65,11 +80,11 @@ def initialize_exquisitor(noms, searchExpansion, numWorkers, segments, modInfoFi
             c['bit_shift_t'],
             c['bit_shift_ir'],
             c['bit_shift_ir'],
-            pow(2, c['decomp_mask_t'])-1,
-            float(pow(2, c['multiplier_t'])),
+            c['decomp_mask_t'],
+            float(c['multiplier_t']),
             pow(2, c['decomp_mask_ir'])-1,
             pow(2, c['decomp_mask_ir'])-1,
-            float(pow(2, c['multiplier_ir'])),
+            float(c['multiplier_ir']),
             mod_weights[m]
         ])
         # [5, 48, 16, 16, pow(2, 32)-1, float(pow(2, 32)), pow(2, 16)-1, pow(2, 16)-1, pow(2, 16)],
@@ -81,7 +96,7 @@ def initialize_exquisitor(noms, searchExpansion, numWorkers, segments, modInfoFi
                    func_type, func_objs, item_metadata, video_metadata, expansionType, statLevel, learningRate)
 
 
-def classify_suggestions(suggList, relevant, p, n, rd):
+def classify_suggestions(suggList, relevant, p, n, rd, negList):
     # Process the suggestions
     global GLOBAL_POS, GLOBAL_NEG, GLOBAL_SUGGS
     pos = 0
@@ -94,9 +109,13 @@ def classify_suggestions(suggList, relevant, p, n, rd):
             if pos != p:
                 GLOBAL_POS.append(i)
                 pos += 1
-        else:
-            GLOBAL_NEG.append(i)
-            neg += 1
+        # Not for YFCC evaluation
+        # else:
+        #     GLOBAL_NEG.append(i)
+        #     neg += 1
+
+    GLOBAL_NEG.append(x for x in negList)
+    neg += len(negList)
 
     exquisitor.reset_model(False)
 
@@ -154,26 +173,22 @@ def run_experiment(resultDir, actorId, actor, runs, rounds, numSuggs, numSegment
         seen_list = actor['pos'][r] + actor['neg'][r]
 
         while(current_session_time < session_end_time):
-            faces_filter = []
-            categories_filter = []
-            tags_filter = []
             train_times = [0.0 for x in range(3)]
             t_start = time()
 
-            #print("Training")
-            #print(train_data, train_labels)
-            #print(filters)
+            # print("Training")
+            # print(train_data, train_labels)
             if train:
                 if actual_run:
                     train_times = exquisitor.train(train_data, train_labels, False, [], False)
                 else:
                     train_times = exquisitor.train(train_data, train_labels, False, [], True)
-            #print(train_times)
-            #print("Getting suggestions")
+            # print(train_times)
+            # print("Getting suggestions")
             (sugg_list, total, worker_time, sugg_time, sugg_overhead) = exquisitor.suggest(numSuggs, numSegments, seen_list, False, [])
-            #print(sugg_list, total, worker_time, sugg_time, sugg_overhead)
-            #print(sugg_list)
-            #print("Got suggestions")
+            # print(sugg_list, total, worker_time, sugg_time, sugg_overhead)
+            # print(sugg_list)
+            # print("Got suggestions")
 
             t_stop = time()
             t = t_stop - t_start
@@ -188,13 +203,14 @@ def run_experiment(resultDir, actorId, actor, runs, rounds, numSuggs, numSegment
             seen_set = set(seen_list)
             seen_set |= suggs
             seen_list = list(seen_set)
+            seen_list += actor['neg_r'][r][rd]
 
             t_classify_start = time()
-            (pos,neg,rel) = classify_suggestions(sugg_list, actor['relevant'], #actor['maybe'],
-                                                  numPos, numNeg, rd+1)
+            (pos,neg,rel) = classify_suggestions(sugg_list, actor['relevant'],
+                                                  numPos, numNeg, rd+1, actor['neg_r'][r][rd])
             t_classify_stop = time()
-            #print("Time to classify: %f" % (t_classify_stop - t_classify_start))
-            #print(pos, neg, done)
+            # print("Time to classify: %f" % (t_classify_stop - t_classify_start))
+            # print(pos, neg, done)
 
             if actual_run:
                 metrics[r]['p'].append(float(len(rel))/float(len(sugg_list)))
@@ -216,12 +232,12 @@ def run_experiment(resultDir, actorId, actor, runs, rounds, numSuggs, numSegment
                     metrics[r]['segments'][s]['time-score'].append(worker_time[s])
                     metrics[r]['segments'][s]['total-scored'].append(total[s])
 
-            #if len(sugg_list) == 0: #and maxB:
-            #    print('%s Actor %d run %d can not advance further!' % (ts(), actorId, r))
-            #    break
-            #elif len(sugg_list) == 0:
-            #    train = False
-            #else:
+            # if len(sugg_list) == 0: #and maxB:
+            #     print('%s Actor %d run %d can not advance further!' % (ts(), actorId, r))
+            #     break
+            # elif len(sugg_list) == 0:
+            #     train = False
+            # else:
             train = True
             train_data = pos + neg
             train_labels = [1.0 for x in range(len(pos))] + [-1.0 for x in range(len(neg))]
@@ -241,10 +257,11 @@ def run_experiment(resultDir, actorId, actor, runs, rounds, numSuggs, numSegment
             current_session_time = rd
         print("%s Actor %d run %d done after %d rounds." % (ts(), actorId, r, rd))
 
-    #pn_file = ('a%d_PN.json') % actorId
-    #pn_path = os.path.join(resultDir, pn_file)
-    #with open(pn_path, 'w') as f:
-    #    json.dump(pn,f)
+    # pn_file = ('a%d_PN.json') % actorId
+    # pn_path = os.path.join(resultDir, pn_file)
+    # with open(pn_path, 'w') as f:
+    #     json.dump(pn,f)
+
 
     p_sum_r = 0.0
     t_sum_r = 0.0
@@ -262,20 +279,13 @@ def run_experiment(resultDir, actorId, actor, runs, rounds, numSuggs, numSegment
     metrics['r'] /= runs
     metrics['t'] = t_sum_r/runs
 
-    #if selectionPolicy == 1:
-    #    m_file = ('a%d_metrics.json') % actorId
-    #    m_path = os.path.join(resultDir, m_file)
-    #    with open(m_path, 'w') as f:
-    #        json.dump(metrics,f)
-    #    return {}
-
     return metrics
 
 
 #######################
 # Main
 #######################
-ACTORS_FILE_HELP = "JSON file containing LSC actors."
+ACTORS_FILE_HELP = "JSON path containing actor files."
 RESULT_FILE_HELP = "File where all the metrics of the experiment will be stored (JSON)."
 RESULT_DIR_HELP = "Directory where all the metrics of the experiment will be stored."
 INIT_FEAT_FILE_HELP = "HDF5 File containing top feature information (Ratio-i64)"
@@ -298,7 +308,7 @@ ITEM_FILTER_HELP = "Sets a filter on the set id. Anything below the id passes."
 ACTORS_APPEND_HELP = "Which actors to run."
 
 parser = argparse.ArgumentParser(description="")
-parser.add_argument('actors_file', type=str, help=ACTORS_FILE_HELP)
+parser.add_argument('actors_path', type=str, help=ACTORS_FILE_HELP)
 parser.add_argument('result_dir', type=str, help=RESULT_DIR_HELP)
 parser.add_argument('result_file', type=str, help=RESULT_FILE_HELP)
 parser.add_argument('mod_info_files', type=str, help=INDEX_CONFIG_FILES_HELP)
@@ -308,8 +318,8 @@ parser.add_argument('--num_suggestions', type=int, default=25, help=NUMBER_OF_SU
 parser.add_argument('--num_workers', type=int, default=1, help=NUMBER_OF_WORKERS_HELP)
 parser.add_argument('--num_segments', type=int, default=16, help=NUMBER_OF_SEGMENTS_HELP)
 parser.add_argument('--num_features', type=int, default=1000, help=NUMBER_OF_FEATURES_HELP)
-parser.add_argument('--num_pos', type=int, default=5, help=NUMBER_OF_POSITIVES_HELP)
-parser.add_argument('--num_neg', type=int, default=15, help=NUMBER_OF_NEGATIVES_HELP)
+parser.add_argument('--num_pos', type=int, default=-1, help=NUMBER_OF_POSITIVES_HELP)
+parser.add_argument('--num_neg', type=int, default=-1, help=NUMBER_OF_NEGATIVES_HELP)
 parser.add_argument('--search_expansion_b', type=int, default=256, help=SEARCH_EXPANSION_FIXED_HELP)
 parser.add_argument('--expansion_type', type=int, default=0, help='ExpansionType: 0=CNT, 1=GRC, 2=FRC, 3=ERC, 4=ARC')
 parser.add_argument('--stat_level', type=int, default=1, help='ECP Statistics level. Default = 1')
@@ -333,7 +343,7 @@ if not(os.path.isdir(result_json_dir)):
     os.mkdir(result_json_dir)
 
 
-actors = read_actors(args.actors_file)
+actors = read_actors(args.actors_path, args.number_of_runs)
 
 initialize_exquisitor(args.noms, args.search_expansion_b, args.num_workers, args.num_segments,
                       args.mod_info_files, args.expansion_type,
