@@ -2,7 +2,7 @@
 '''
 experiment.py
 
-The experimental script for Exquisitor
+The experimental script for Exquisitor (original research version)
 
 Author: Omar Khan, ITU, July 2019
 '''
