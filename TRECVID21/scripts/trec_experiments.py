@@ -91,12 +91,14 @@ def classify_suggestions(suggList, relevant, maybe, p, n, rd):
     for i in suggList:
         if i in relevant:
             rel.append(i)
+            # Add positives up to p
             if pos != p:
                 GLOBAL_POS.append(i)
                 pos += 1
         elif i in maybe:
             continue
         elif neg != n:
+            # Add negatives up to n
             GLOBAL_NEG.append(i)
             neg += 1
 
