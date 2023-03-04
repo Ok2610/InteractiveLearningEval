@@ -38,7 +38,7 @@ def read_actors(actorsFile):
 
 
 def initialize_exquisitor(noms, searchExpansion, numWorkers, segments, modInfoFiles,
-                          expansionType, statLevel, modWeights, learningRate):
+                          expansionType, statLevel, modWeights, ffs, guaranteedSlots):
     mod_info = []
     with open(modInfoFiles,'r') as f:
         mod_info = json.load(f)
@@ -78,10 +78,10 @@ def initialize_exquisitor(noms, searchExpansion, numWorkers, segments, modInfoFi
     item_metadata = []
     video_metadata = []
     exquisitor.initialize(iota, noms, num_workers, segments, num_modalities, b, indx_conf_files, mod_feature_dimensions,
-                   func_type, func_objs, item_metadata, video_metadata, expansionType, statLevel, learningRate)
+                   func_type, func_objs, item_metadata, video_metadata, expansionType, statLevel, ffs, guaranteedSlots)
 
 
-def classify_suggestions(suggList, relevant, maybe, p, n, rd):
+def classify_suggestions(suggList, relevant, p, n, rd):
     # Process the suggestions
     global GLOBAL_POS, GLOBAL_NEG, GLOBAL_SUGGS
     pos = 0
@@ -91,14 +91,10 @@ def classify_suggestions(suggList, relevant, maybe, p, n, rd):
     for i in suggList:
         if i in relevant:
             rel.append(i)
-            # Add positives up to p
             if pos != p:
                 GLOBAL_POS.append(i)
                 pos += 1
-        elif i in maybe:
-            continue
-        elif neg != n:
-            # Add negatives up to n
+        else:
             GLOBAL_NEG.append(i)
             neg += 1
 
@@ -108,7 +104,7 @@ def classify_suggestions(suggList, relevant, maybe, p, n, rd):
 
 
 def run_experiment(resultDir, actorId, actor, runs, rounds, numSuggs, numSegments,
-                   numPos, numNeg, measurements, maxB, static_w):
+                   numPos, numNeg, measurements, maxB, static_w, no_reset_w):
     global GLOBAL_POS, GLOBAL_NEG, GLOBAL_SUGGS
     metrics = {}
     metrics['p'] = 0.0
@@ -140,7 +136,8 @@ def run_experiment(resultDir, actorId, actor, runs, rounds, numSuggs, numSegment
         actual_run = True
         if static_w:
             actual_run = False
-        exquisitor.reset_model(True)
+        if not no_reset_w:
+            exquisitor.reset_model(True)
         train = True
         rd = 0
         start_time = 0
@@ -176,7 +173,7 @@ def run_experiment(resultDir, actorId, actor, runs, rounds, numSuggs, numSegment
             #print("Getting suggestions")
             (sugg_list, total, worker_time, sugg_time, sugg_overhead) = exquisitor.suggest(numSuggs, numSegments, seen_list, False, [])
             #print(sugg_list, total, worker_time, sugg_time, sugg_overhead)
-            #print(sugg_list)
+            print(len(sugg_list))
             #print("Got suggestions")
 
             t_stop = time()
@@ -194,11 +191,12 @@ def run_experiment(resultDir, actorId, actor, runs, rounds, numSuggs, numSegment
             seen_list = list(seen_set)
 
             t_classify_start = time()
-            (pos,neg,rel) = classify_suggestions(sugg_list, actor['relevant'], actor['maybe'],
+            (pos,neg,rel) = classify_suggestions(sugg_list, actor['relevant'], #actor['maybe'],
                                                   numPos, numNeg, rd+1)
             t_classify_stop = time()
             #print("Time to classify: %f" % (t_classify_stop - t_classify_start))
             #print(pos, neg, done)
+
             if actual_run:
                 metrics[r]['p'].append(float(len(rel))/float(len(sugg_list)))
 
@@ -231,8 +229,6 @@ def run_experiment(resultDir, actorId, actor, runs, rounds, numSuggs, numSegment
             train_item_count = len(pos) + len(neg)
 
             rd += 1
-            # This if statement is used when the evaluation is simulating initial rounds without measurements
-            # Essentially for learning modality weights from an "existing" session if possible
             if static_w and not actual_run and session_end_time == rd:
                 rd = 0
                 actual_run = True
@@ -323,8 +319,10 @@ parser.add_argument('--number_of_rounds', type=int, default=10, help=NUMBER_OF_R
 parser.add_argument('--cluster_opt', type=int, default=0, help=CLUSTER_OPT_HELP)
 parser.add_argument('--actors_append', action='append', type=int, default=[], help=ACTORS_APPEND_HELP)
 parser.add_argument('--modw_append', action='append', type=float, default=[], help='Weights for each modality. Default 1.0.')
-parser.add_argument('--learning_rate', type=float, default=0.1)
+parser.add_argument('--ffs', action='store_true', default=False, help='Run with FFS')
+parser.add_argument('--guaranteed_slots', type=int, default=0, help='Number of guaranteed slots in FFS')
 parser.add_argument('--static_w', action='store_true', default=False, help='Re-run active run with learned weights')
+parser.add_argument('--no_reset_weights', action='store_true', default=False, help='Do not reset modality weights after first run')
 
 args = parser.parse_args()
 
@@ -342,7 +340,7 @@ actors = read_actors(args.actors_file)
 
 initialize_exquisitor(args.noms, args.search_expansion_b, args.num_workers, args.num_segments,
                       args.mod_info_files, args.expansion_type,
-                      args.stat_level, args.modw_append, args.learning_rate)
+                      args.stat_level, args.modw_append, args.ffs, args.guaranteed_slots)
 print("%s Initialized!" % ts())
 
 a_to_run = set()
@@ -358,7 +356,7 @@ for idx, a in enumerate(actors):
         continue
     metrics[idx] = run_experiment(result_json_dir, idx, actors[a], args.number_of_runs, args.number_of_rounds,
                                   args.num_suggestions, args.num_segments, args.num_pos, args.num_neg,
-                                  args.measurements, (args.search_expansion_b == MAX_B), args.static_w)
+                                  args.measurements, (args.search_expansion_b == MAX_B), args.static_w, args.no_reset_weights)
     print("%s Actor %d done" % (ts(),idx))
 
 
