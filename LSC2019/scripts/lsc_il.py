@@ -130,11 +130,11 @@ def calculate_distance_items(suggVector, relVector):
 
     return dist
 
-def calculate_distance_avg_vector(suggVector, avgVector):
+def calculate_distance_cmb_vector(suggVector, cmbVector):
     dist = 0.0
     ids_avg = {}
-    for key in avgVector:
-        ids_avg[int(key)] = avgVector[key]
+    for key in cmbVector:
+        ids_avg[int(key)] = cmbVector[key]
 
     for (idx,val) in suggVector:
         if idx in ids_avg:
@@ -149,11 +149,11 @@ def calculate_distance_avg_vector(suggVector, avgVector):
     return dist
 
 
-def calculate_distance_avg_vector_normalized(suggVector, avgVector):
+def calculate_distance_cmb_vector_normalized(suggVector, cmbVector):
     dist = 0.0
     ids_avg = {}
-    for key in avgVector:
-        ids_avg[int(key)] = avgVector[key]
+    for key in cmbVector:
+        ids_avg[int(key)] = cmbVector[key]
 
     l2norm = 0.0
     for idx in ids_avg:
@@ -189,11 +189,11 @@ def calculate_distance_mahal_vec(suggVector, relevantVector, iv):
     return dist
 
 
-def calculate_distance_mahal_avg(suggVector, avgVector, iv):
+def calculate_distance_mahal_cmb(suggVector, cmbVector, iv):
     dist = 0.0
     avg_vector = np.array([0.0 for x in range(1000)])
-    for key in avgVector:
-        avg_vector[int(key)] = avgVector[key]
+    for key in cmbVector:
+        avg_vector[int(key)] = cmbVector[key]
     sugg_vector = np.array([0.0 for x in range(1000)]) #Make range a parameter
     for (idx,val) in suggVector:
         sugg_vector[idx] = val
@@ -243,7 +243,7 @@ def initialize_exquisitor(noms, searchExpansion, numWorkers, segments, indexConf
                           vis_init, txt_ids, txt_ratios, txt_init, indx_conf_txt, indx_conf_vis, b, expansion_type, cluster_opt,
                           item_filter, f_locations, f_hours, f_days)
 
-def classify_suggestions(suggList, compFiles, avgVector, relevant, posPolicy, negPolicy, threshold, p, n, rd,
+def classify_suggestions(suggList, compFiles, cmbVector, relevant, posPolicy, negPolicy, threshold, p, n, rd,
                          distanceCalculation):
     # Process the suggestions
     global GLOBAL_POS, GLOBAL_NEG, GLOBAL_SUGGS
@@ -272,9 +272,9 @@ def classify_suggestions(suggList, compFiles, avgVector, relevant, posPolicy, ne
                 done = True
             features = read_single_item_features(s, compFiles[0], compFiles[1], compFiles[2])
             if distanceCalculation == 0:
-                distances.append((calculate_distance_avg_vector(features, avgVector),s))
+                distances.append((calculate_distance_cmb_vector(features, cmbVector),s))
             elif distanceCalculation == 1:
-                distances.append((calculate_distance_mahal_avg(features, avgVector, IV),s))
+                distances.append((calculate_distance_mahal_avg(features, cmbVector, IV),s))
 
     distances = sorted(distances)
 

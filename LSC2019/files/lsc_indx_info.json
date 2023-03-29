@@ -1,0 +1,1 @@
+[ {"feat_key": "data", "bit_shift_t": 54, "multiplier_t": 10000000000000000.0, "decomp_mask_t": 18014398509481983, "n_feat_int": 6, "bit_shift_ir": 10, "decomp_mask_ir": 1023, "multiplier_ir": 1000, "total_feats": 1000, "indx_path": "/var/scratch/oshahbaz/lsc2019/data/index/vis_index_full.cnfg"} ]
