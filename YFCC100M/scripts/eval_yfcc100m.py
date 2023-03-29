@@ -1,4 +1,4 @@
-import exq as exquisitor
+import exq
 import os
 import json
 import numpy as np
@@ -92,7 +92,7 @@ def initialize_exquisitor(noms, searchExpansion, numWorkers, segments, modInfoFi
         # [8, 55, 9, 9, pow(2, 32)-1, float(pow(2, 32)), pow(2, 9)-1, pow(2, 9)-1, pow(2, 9)]
     item_metadata = []
     video_metadata = []
-    exquisitor.initialize(iota, noms, num_workers, segments, num_modalities, b, indx_conf_files, mod_feature_dimensions,
+    exq.initialize(iota, noms, num_workers, segments, num_modalities, b, indx_conf_files, mod_feature_dimensions,
                    func_type, func_objs, item_metadata, video_metadata, expansionType, statLevel, ffs, guaranteedSlots)
 
 
@@ -114,10 +114,10 @@ def classify_suggestions(suggList, relevant, p, n, rd, negList):
         #     GLOBAL_NEG.append(i)
         #     neg += 1
 
-    GLOBAL_NEG.append(x for x in negList)
+    GLOBAL_NEG += negList
     neg += len(negList)
 
-    exquisitor.reset_model(False)
+    exq.reset_model(False, False)
 
     return (GLOBAL_POS, GLOBAL_NEG, rel)
 
@@ -156,7 +156,7 @@ def run_experiment(resultDir, actorId, actor, runs, rounds, numSuggs, numSegment
         if static_w:
             actual_run = False
         if not no_reset_w:
-            exquisitor.reset_model(True)
+            exq.reset_model(True,True)
         train = True
         rd = 0
         start_time = 0
@@ -181,12 +181,12 @@ def run_experiment(resultDir, actorId, actor, runs, rounds, numSuggs, numSegment
             # print(train_data, train_labels)
             if train:
                 if actual_run:
-                    train_times = exquisitor.train(train_data, train_labels, False, [], False)
+                    train_times = exq.train(train_data, train_labels, False, [], False)
                 else:
-                    train_times = exquisitor.train(train_data, train_labels, False, [], True)
+                    train_times = exq.train(train_data, train_labels, False, [], True)
             # print(train_times)
             # print("Getting suggestions")
-            (sugg_list, total, worker_time, sugg_time, sugg_overhead) = exquisitor.suggest(numSuggs, numSegments, seen_list, False, [])
+            (sugg_list, total, worker_time, sugg_time, sugg_overhead) = exq.suggest(numSuggs, numSegments, seen_list, False, [])
             # print(sugg_list, total, worker_time, sugg_time, sugg_overhead)
             # print(sugg_list)
             # print("Got suggestions")
@@ -196,9 +196,9 @@ def run_experiment(resultDir, actorId, actor, runs, rounds, numSuggs, numSegment
 
             if measurements:
                 if rd == 0:
-                    exquisitor.log(actorId,r,rd,1)
+                    exq.log(actorId,r,rd,1)
                 else:
-                    exquisitor.log(actorId,r,rd,0)
+                    exq.log(actorId,r,rd,0)
 
             suggs = set(sugg_list)
             seen_set = set(seen_list)
@@ -289,9 +289,6 @@ def run_experiment(resultDir, actorId, actor, runs, rounds, numSuggs, numSegment
 ACTORS_FILE_HELP = "JSON path containing actor files."
 RESULT_FILE_HELP = "File where all the metrics of the experiment will be stored (JSON)."
 RESULT_DIR_HELP = "Directory where all the metrics of the experiment will be stored."
-INIT_FEAT_FILE_HELP = "HDF5 File containing top feature information (Ratio-i64)"
-FEAT_IDS_FILE_HELP = "HDF5 File containing other feature ids information (Ratio-i64)"
-RATIOS_FILE_HELP = "HDF5 File containing feature ratio information (Ratio-i64)"
 INDEX_CONFIG_FILES_HELP = "JSON File containing information about modalities and index file path location."
 NUMBER_OF_SUGGESTIONS_HELP = "Set number of suggestions to get per round. Default is 25."
 NUMBER_OF_WORKERS_HELP = "Set number of workers to use. Default is 1."
@@ -303,9 +300,6 @@ SEARCH_EXPANSION_FIXED_HELP = "The number of clusters selected from training, al
 FILTER_COUNT_HELP = "Set this option if expansion should be based on LSC active filters."
 NUMBER_OF_RUNS_HELP = "Set number of times the experiment runs. Default is 50."
 NUMBER_OF_ROUNDS_HELP = "Set number of interaction rounds in each run. Default is 10."
-PREDICT_HELP = "Set this option if exquisitor is compiled with CCOVERAGE_PROB or PREDICT_COUNT"
-CLUSTER_OPT_HELP = "Any cluster containing items below the set id will be marked and only they will be used during selection."
-ITEM_FILTER_HELP = "Sets a filter on the set id. Anything below the id passes."
 ACTORS_APPEND_HELP = "Which actors to run."
 
 parser = argparse.ArgumentParser(description="")
@@ -326,7 +320,6 @@ parser.add_argument('--expansion_type', type=int, default=0, help='ExpansionType
 parser.add_argument('--stat_level', type=int, default=1, help='ECP Statistics level. Default = 1')
 parser.add_argument('--number_of_runs', type=int, default=50, help=NUMBER_OF_RUNS_HELP)
 parser.add_argument('--number_of_rounds', type=int, default=10, help=NUMBER_OF_ROUNDS_HELP)
-parser.add_argument('--cluster_opt', type=int, default=0, help=CLUSTER_OPT_HELP)
 parser.add_argument('--actors_append', action='append', type=int, default=[], help=ACTORS_APPEND_HELP)
 parser.add_argument('--modw_append', action='append', type=float, default=[], help='Weights for each modality. Default 1.0.')
 parser.add_argument('--ffs', action='store_true', default=False, help='Run with FFS')
@@ -351,6 +344,7 @@ actors = read_actors(args.actors_path, args.number_of_runs)
 initialize_exquisitor(args.noms, args.search_expansion_b, args.num_workers, args.num_segments,
                       args.mod_info_files, args.expansion_type,
                       args.stat_level, args.modw_append, args.ffs, args.guaranteed_slots)
+
 print("%s Initialized!" % ts())
 
 a_to_run = set()
