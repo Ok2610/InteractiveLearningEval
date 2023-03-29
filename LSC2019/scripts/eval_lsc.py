@@ -13,6 +13,29 @@ from scipy.spatial import distance
 #######################
 # Global variables
 #######################
+### LSC 2019
+DECOMP_MASK = [pow(2, 10) - 1, pow(2, 14) - 1, pow(2, 16) - 1, pow(2, 20) - 1, pow(2, 30) - 1]
+MULTIPLIER = [np.uint64(1000), np.uint64(10000),
+              np.uint64(1000000), np.uint64(1000000000)]
+
+MAX_N_INT = np.uint64(15)
+
+BIT_SHIFT_RATIO = [np.uint64(4), np.uint64(14), np.uint64(24),
+                   np.uint64(34), np.uint64(44), np.uint64(54)]
+
+FEAT_PER_INT_RATIO = 6
+MULTIPLIER_RATIO = np.uint64(1000)
+PRECISION_RATIO = 3
+
+BIT_SHIFT_INIT_RATIO = np.uint64(54)
+MULTIPLIER_INIT = np.uint64(pow(10, 16))
+MASK_INIT = np.uint64(18014398509481983)
+
+DAYS = {'Monday': 0, 'Tuesday': 1, 'Wednesday': 2, 'Thursday': 3, 'Friday': 4, 'Saturday': 5, 'Sunday': 6}
+
+LOCATIONS = {}
+###
+
 GLOBAL_POS = []
 GLOBAL_NEG = []
 GLOBAL_SUGGS = []
@@ -161,7 +184,7 @@ def initialize_exquisitor(noms, searchExpansion, numWorkers, segments, modInfoFi
                    func_type, func_objs, item_metadata, video_metadata, expansionType, statLevel, ffs, guaranteedSlots)
 
 
-def classify_suggestions(suggList, compFiles, cmbVector, relevant, posPolicy, negPolicy, threshold, p, n, rd):
+def classify_suggestions(suggList, cmbVector, relevant, posPolicy, negPolicy, p, n, rd, compFiles):
     # Process the suggestions
     global GLOBAL_POS, GLOBAL_NEG, GLOBAL_SUGGS
     done = False
@@ -252,7 +275,7 @@ def classify_suggestions(suggList, compFiles, cmbVector, relevant, posPolicy, ne
 
 
 def run_experiment(resultDir, actorId, actor, runs, rounds, numSuggs, numSegments,
-                   numPos, numNeg, measurements, maxB, static_w, no_reset_w):
+                   numPos, numNeg, measurements, maxB, static_w, no_reset_w, compFiles):
     global GLOBAL_POS, GLOBAL_NEG, GLOBAL_SUGGS
     metrics = {}
     metrics['p'] = 0.0
@@ -333,11 +356,13 @@ def run_experiment(resultDir, actorId, actor, runs, rounds, numSuggs, numSegment
             seen_set = set(seen_list)
             seen_set |= suggs
             seen_list = list(seen_set)
-            seen_list += actor['neg_r'][r][rd]
 
             t_classify_start = time()
-            (pos,neg,done) = classify_suggestions(sugg_list, actor['relevant'],
-                                                  numPos, numNeg, rd+1, actor['neg_r'][r][rd])
+            # AccRep
+            posPolicy = 1
+            negPolicy = 1
+            (pos,neg,done) = classify_suggestions(sugg_list, actor['avgVector'], actor['relevant'],
+                                                  numPos, numNeg, rd+1, posPolicy, negPolicy, compFiles)
             t_classify_stop = time()
             # print("Time to classify: %f" % (t_classify_stop - t_classify_start))
             # print(pos, neg, done)
@@ -433,12 +458,18 @@ FILTER_COUNT_HELP = "Set this option if expansion should be based on LSC active 
 NUMBER_OF_RUNS_HELP = "Set number of times the experiment runs. Default is 50."
 NUMBER_OF_ROUNDS_HELP = "Set number of interaction rounds in each run. Default is 10."
 ACTORS_APPEND_HELP = "Which actors to run."
+FILTERS_FILE_HELP = "JSON File containing filters for all items."
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument('actors_path', type=str, help=ACTORS_FILE_HELP)
 parser.add_argument('result_dir', type=str, help=RESULT_DIR_HELP)
 parser.add_argument('result_file', type=str, help=RESULT_FILE_HELP)
 parser.add_argument('mod_info_files', type=str, help=INDEX_CONFIG_FILES_HELP)
+parser.add_argument('h5_init_feat_file', type=str)
+parser.add_argument('h5_feat_ids_file', type=str)
+parser.add_argument('h5_ratios_file', type=str)
+parser.add_argument('filters_file', type=str, help=FILTERS_FILE_HELP)
+parser.add_argument('locations_file', type=str)
 parser.add_argument('--measurements', action='store_true', default=False)
 parser.add_argument('--noms', type=int, default=1000)
 parser.add_argument('--num_suggestions', type=int, default=25, help=NUMBER_OF_SUGGESTIONS_HELP)
@@ -471,9 +502,18 @@ if not(os.path.isdir(result_json_dir)):
     os.mkdir(result_json_dir)
 
 
-actors = read_actors(args.actors_path, args.number_of_runs)
+actors = read_actors(args.actors_path)
 
 filters = read_item_properties(args.filters_file)
+
+comp_files = []
+comp_files.append(args.h5_init_feat_file)
+comp_files.append(args.h5_feat_ids_file)
+comp_files.append(args.h5_ratios_file)
+with open(args.locations_file, 'r') as f:
+    loc = json.load(f)
+    for idx,s in enumerate(loc):
+        LOCATIONS[s.lower()] = idx
 
 initialize_exquisitor(args.noms, args.search_expansion_b, args.num_workers, args.num_segments,
                       args.mod_info_files, args.expansion_type,
@@ -495,7 +535,8 @@ for idx, a in enumerate(actors):
         continue
     metrics[idx] = run_experiment(result_json_dir, idx, actors[a], args.number_of_runs, args.number_of_rounds,
                                   args.num_suggestions, args.num_segments, args.num_pos, args.num_neg,
-                                  args.measurements, (args.search_expansion_b == MAX_B), args.static_w, args.no_reset_weights)
+                                  args.measurements, (args.search_expansion_b == MAX_B), args.static_w, args.no_reset_weights,
+                                  comp_files)
     print("%s Actor %d done" % (ts(),idx))
 
 
