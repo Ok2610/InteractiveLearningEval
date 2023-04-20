@@ -198,6 +198,7 @@ def classify_suggestions(suggList, cmbVector, relevant, posPolicy, negPolicy, p,
         distances.append((calculate_distance_cmb_vector(features, cmbVector),s))
 
     distances = sorted(distances)
+    # print(distances)
 
     if posPolicy == 0: #Acc-add
         GLOBAL_POS += distances[:p]
@@ -266,10 +267,11 @@ def classify_suggestions(suggList, cmbVector, relevant, posPolicy, negPolicy, p,
 
 
     if negPolicy != 4:
+        # print(p,n,GLOBAL_POS, GLOBAL_NEG)
         pos = [e[1] for e in GLOBAL_POS]
         neg = [e[1] for e in GLOBAL_NEG]
 
-    exq.reset_model(0)
+    exq.reset_model(False, False)
 
     return (pos,neg,done)
 
@@ -316,14 +318,12 @@ def run_experiment(resultDir, actorId, actor, runs, rounds, numSuggs, numSegment
         session_end_time = rounds
         train_data = []
         train_labels = []
-        train_item_count = 0
         GLOBAL_POS = []
         GLOBAL_NEG = []
         GLOBAL_SUGGS = []
-        relevant = set()
-        train_data = actor['pos'][r] + actor['neg'][r]
-        train_labels = [1.0 for x in range(len(actor['pos'][r]))] + [-1.0 for x in range(len(actor['neg'][r]))]
-        seen_list = actor['pos'][r] + actor['neg'][r]
+        train_data = actor['start'][str(r)]
+        train_labels = [1.0 for x in range(5)] + [-1.0 for x in range(5)]
+        seen_list = []
 
         while(current_session_time < session_end_time):
             train_times = [0.0 for x in range(3)]
@@ -340,7 +340,7 @@ def run_experiment(resultDir, actorId, actor, runs, rounds, numSuggs, numSegment
             # print("Getting suggestions")
             (sugg_list, total, worker_time, sugg_time, sugg_overhead) = exq.suggest(numSuggs, numSegments, seen_list, False, [])
             # print(sugg_list, total, worker_time, sugg_time, sugg_overhead)
-            # print(sugg_list)
+            print(sugg_list)
             # print("Got suggestions")
 
             t_stop = time()
@@ -362,7 +362,7 @@ def run_experiment(resultDir, actorId, actor, runs, rounds, numSuggs, numSegment
             posPolicy = 1
             negPolicy = 1
             (pos,neg,done) = classify_suggestions(sugg_list, actor['avgVector'], actor['relevant'],
-                                                  numPos, numNeg, rd+1, posPolicy, negPolicy, compFiles)
+                                                  posPolicy, negPolicy, numPos, numNeg, rd+1, compFiles)
             t_classify_stop = time()
             # print("Time to classify: %f" % (t_classify_stop - t_classify_start))
             # print(pos, neg, done)
@@ -533,7 +533,7 @@ for idx, a in enumerate(actors):
     if idx not in a_to_run:
         print('Skipping actor %d' % idx)
         continue
-    metrics[idx] = run_experiment(result_json_dir, idx, actors[a], args.number_of_runs, args.number_of_rounds,
+    metrics[idx] = run_experiment(result_json_dir, idx, a, args.number_of_runs, args.number_of_rounds,
                                   args.num_suggestions, args.num_segments, args.num_pos, args.num_neg,
                                   args.measurements, (args.search_expansion_b == MAX_B), args.static_w, args.no_reset_weights,
                                   comp_files)
