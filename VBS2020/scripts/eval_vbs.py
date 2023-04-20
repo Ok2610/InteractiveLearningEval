@@ -13,7 +13,7 @@ from scipy.spatial import distance
 #######################
 # Global variables
 #######################
-### LSC 2019
+### VBS 2020
 DECOMP_MASK = [pow(2, 10) - 1, pow(2, 14) - 1, pow(2, 16) - 1, pow(2, 20) - 1, pow(2, 30) - 1]
 MULTIPLIER = [np.uint64(1000), np.uint64(10000),
               np.uint64(1000000), np.uint64(1000000000)]
@@ -31,18 +31,25 @@ BIT_SHIFT_INIT_RATIO = np.uint64(54)
 MULTIPLIER_INIT = np.uint64(pow(10, 16))
 MASK_INIT = np.uint64(18014398509481983)
 
-DAYS = {'Monday': 0, 'Tuesday': 1, 'Wednesday': 2, 'Thursday': 3, 'Friday': 4, 'Saturday': 5, 'Sunday': 6}
+CATEGORIES = {}
+TAGS = {}
+FACES = {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5}
 
-LOCATIONS = {}
+GLOBAL_POS = []
+GLOBAL_NEG = []
+GLOBAL_SUGGS = []
+ALL_IDS = set([x for x in range(0,1082657)])
+
+
 ###
 
 GLOBAL_POS = []
 GLOBAL_NEG = []
 GLOBAL_SUGGS = []
 
-MAX_B = 417
-TOTAL_VIDEOS = -1 # Not applicable
-ALL_IDS = set([x for x in range(0,41666)])
+MAX_B = 10827
+TOTAL_VIDEOS = 7475
+ALL_IDS = set([x for x in range(0,1082657)])
 
 #######################
 # Functions
@@ -115,36 +122,48 @@ def read_actors(actorsFile):
     return actors
 
 
-def read_item_properties(filtersFile):
+def read_item_properties(filtersFile, vidInfoFile):
     filters = []
     with open(filtersFile,'r') as f:
         filters = json.load(f)
     n_size = len(filters)
-    f_locations = [filters[i]['locationId'] for i in range(n_size)]
-    f_hours = [filters[i]['hour'] for i in range(n_size)]
-    f_days = [filters[i]['day'] for i in range(n_size)]
+
+    with open(vidInfoFile,'r') as f:
+        vidInfo = json.load(f)
 
     item_metadata = []
     for i in range(n_size):
         item = \
-            [0, False, 0, \
+            [0, True, filters[i]['vidId'], \
                 [
-                    [f_days[i]],
-                    [f_hours[i]],
                 ], #std_props
                 [
-                    [f_locations[i]],
+                    [filters[i]['faces']],
                 ], #collection_props
                 [] #count_props
             ]
         item_metadata.append(item)
+    
+    f_categories = []
+    f_tags = []
+    for i in range(TOTAL_VIDEOS):
+        vid_id = '{:05d}'.format((i+1))
+        f_categories.append(filters[vidInfo[vid_id]['shots'][0]['exqId']]['catIds'])
+        f_tags.append(filters[vidInfo[vid_id]['shots'][0]['exqId']]['tagIds'])
 
-    return item_metadata
+    vid_metadata = [[]]
+    for i in range(TOTAL_VIDEOS):
+        vid = [
+            f_categories[i],
+            f_tags[i]
+        ]
+        vid_metadata[0].append(vid)
 
+    return item_metadata, vid_metadata
 
 def initialize_exquisitor(noms, searchExpansion, numWorkers, segments, modInfoFiles,
                           expansionType, statLevel, modWeights, ffs, guaranteedSlots,
-                          collFilters):
+                          item_meta, vid_meta):
     mod_info = []
     with open(modInfoFiles,'r') as f:
         mod_info = json.load(f)
@@ -178,8 +197,8 @@ def initialize_exquisitor(noms, searchExpansion, numWorkers, segments, modInfoFi
             float(c['multiplier_ir']),
             mod_weights[m]
         ])
-    item_metadata = collFilters
-    video_metadata = []
+    item_metadata = item_meta
+    video_metadata = vid_meta
     exq.initialize(iota, noms, num_workers, segments, num_modalities, b, indx_conf_files, mod_feature_dimensions,
                    func_type, func_objs, item_metadata, video_metadata, expansionType, statLevel, ffs, guaranteedSlots)
 
@@ -458,7 +477,8 @@ FILTER_COUNT_HELP = "Set this option if expansion should be based on LSC active 
 NUMBER_OF_RUNS_HELP = "Set number of times the experiment runs. Default is 50."
 NUMBER_OF_ROUNDS_HELP = "Set number of interaction rounds in each run. Default is 10."
 ACTORS_APPEND_HELP = "Which actors to run."
-FILTERS_FILE_HELP = "JSON File containing filters for all items."
+FILTERS_FILE_HELP = "JSON File containing metadata for all items."
+VIDINFO_FILE_HELP = "JSON File containing metadata for all videos."
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument('actors_path', type=str, help=ACTORS_FILE_HELP)
@@ -469,7 +489,9 @@ parser.add_argument('h5_init_feat_file', type=str)
 parser.add_argument('h5_feat_ids_file', type=str)
 parser.add_argument('h5_ratios_file', type=str)
 parser.add_argument('filters_file', type=str, help=FILTERS_FILE_HELP)
-parser.add_argument('locations_file', type=str)
+parser.add_argument('vidinfo_file', type=str, help=VIDINFO_FILE_HELP)
+parser.add_argument('categories_file', type=str)
+parser.add_argument('tags_file', type=str)
 parser.add_argument('--measurements', action='store_true', default=False)
 parser.add_argument('--noms', type=int, default=1000)
 parser.add_argument('--num_suggestions', type=int, default=25, help=NUMBER_OF_SUGGESTIONS_HELP)
@@ -478,7 +500,7 @@ parser.add_argument('--num_segments', type=int, default=16, help=NUMBER_OF_SEGME
 parser.add_argument('--num_features', type=int, default=1000, help=NUMBER_OF_FEATURES_HELP)
 parser.add_argument('--num_pos', type=int, default=-1, help=NUMBER_OF_POSITIVES_HELP)
 parser.add_argument('--num_neg', type=int, default=-1, help=NUMBER_OF_NEGATIVES_HELP)
-parser.add_argument('--search_expansion_b', type=int, default=64, help=SEARCH_EXPANSION_FIXED_HELP)
+parser.add_argument('--search_expansion_b', type=int, default=256, help=SEARCH_EXPANSION_FIXED_HELP)
 parser.add_argument('--expansion_type', type=int, default=0, help='ExpansionType: 0=CNT, 1=GRC, 2=FRC, 3=ERC, 4=ARC')
 parser.add_argument('--stat_level', type=int, default=1, help='ECP Statistics level. Default = 1')
 parser.add_argument('--number_of_runs', type=int, default=50, help=NUMBER_OF_RUNS_HELP)
@@ -504,21 +526,26 @@ if not(os.path.isdir(result_json_dir)):
 
 actors = read_actors(args.actors_path)
 
-filters = read_item_properties(args.filters_file)
+item_metadata, vid_metadata = read_item_properties(args.filters_file, args.vidinfo_file)
 
 comp_files = []
 comp_files.append(args.h5_init_feat_file)
 comp_files.append(args.h5_feat_ids_file)
 comp_files.append(args.h5_ratios_file)
-with open(args.locations_file, 'r') as f:
-    loc = json.load(f)
-    for idx,s in enumerate(loc):
-        LOCATIONS[s.lower()] = idx
+with open(args.categories_file, 'r') as f:
+    cats = json.load(f)
+    for idx,s in enumerate(cats):
+        CATEGORIES[s.lower()] = idx
+
+with open(args.tags_file, 'r') as f:
+    tags = json.load(f)
+    for idx,s in enumerate(tags):
+        TAGS[s.lower()] = idx
 
 initialize_exquisitor(args.noms, args.search_expansion_b, args.num_workers, args.num_segments,
                       args.mod_info_files, args.expansion_type,
                       args.stat_level, args.modw_append, args.ffs, args.guaranteed_slots,
-                      filters)
+                      item_metadata, vid_metadata)
 
 print("%s Initialized!" % ts())
 
