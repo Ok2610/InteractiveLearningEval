@@ -380,7 +380,7 @@ def run_experiment(resultDir, actorId, actor, runs, rounds, numSuggs, numSegment
             # AccRep
             posPolicy = 1
             negPolicy = 1
-            (pos,neg,done) = classify_suggestions(sugg_list, actor['avgVector'], actor['relevant'],
+            (pos,neg,done) = classify_suggestions(sugg_list, actor['relVector'], actor['relevant'],
                                                   posPolicy, negPolicy, numPos, numNeg, rd+1, compFiles)
             t_classify_stop = time()
             # print("Time to classify: %f" % (t_classify_stop - t_classify_start))
